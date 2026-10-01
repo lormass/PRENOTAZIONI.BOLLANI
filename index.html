@@ -229,6 +229,33 @@
     .place{letter-spacing:.32em;}
   }
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+  /* ===== Campo "persone" scrivibile da tastiera ===== */
+  .cnum .pax-input{
+    display:block;width:100%;max-width:120px;margin:0 auto;
+    font-family:'Inter',sans-serif;font-size:3rem;font-weight:700;line-height:1;text-align:center;
+    color:#fff;background:transparent;border:1px solid transparent;border-radius:14px;
+    padding:4px 0;outline:none;appearance:none;-webkit-appearance:none;caret-color:var(--aperol);
+    transition:background .18s,border-color .18s;}
+  .cnum .pax-input:hover{background:var(--glass);}
+  .cnum .pax-input:focus{background:rgba(255,255,255,.09);border-color:var(--aperol);}
+  .cnum .pax-input.err{border-color:var(--red-soft);color:var(--red-soft);}
+  .cnum .pax-input::selection{background:rgba(255,122,26,.35);color:#fff;}
+  .cnum .pax-input::-moz-selection{background:rgba(255,122,26,.35);color:#fff;}
+  .pax-hint{text-align:center;font-size:.78rem;color:var(--muted);line-height:1.5;margin:14px 0 0;}
+  .pax-hint.err{color:var(--red-soft);}
+  @media (max-width:420px){
+    .cnum .pax-input{font-size:2.4rem;max-width:96px;}
+  }
+
+  /* ===== Pulsante "fai un'altra prenotazione" ===== */
+  .btn-restart{display:block;width:100%;margin-top:18px;background:transparent;color:var(--muted);
+    border:1px solid var(--glass-border);font-size:.95rem;padding:14px;}
+  .btn-restart:hover{color:var(--cream);}
+
+  /* ===== Focus visibile per chi naviga da tastiera ===== */
+  .btn:focus-visible,.cbtn:focus-visible,.btn-send:focus-visible,.btn-restart:focus-visible,
+  .choice:focus-visible,.cal-day:focus-visible,.cal-nav:focus-visible{
+    outline:2px solid var(--aperol);outline-offset:3px;}
 </style>
 </head>
 <body>
@@ -286,10 +313,16 @@
       <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot on"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
       <p class="q-label">In quanti siete?</p>
       <div class="counter">
-        <button class="cbtn" id="minus">−</button>
-        <div class="cnum"><span id="pax">2</span><small>persone</small></div>
-        <button class="cbtn" id="plus">+</button>
+        <button class="cbtn" id="minus" type="button" aria-label="Una persona in meno">−</button>
+        <div class="cnum">
+          <input id="pax" class="pax-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2"
+                 value="2" autocomplete="off" enterkeyhint="done"
+                 aria-label="Numero di persone" aria-describedby="paxHint">
+          <small id="paxWord">persone</small>
+        </div>
+        <button class="cbtn" id="plus" type="button" aria-label="Una persona in più">+</button>
       </div>
+      <p class="pax-hint" id="paxHint">Scrivi il numero o usa i tasti. Da 1 a 30 persone.</p>
       <div class="field" style="margin-top:28px;">
         <label for="time">Orario di arrivo</label>
         <input type="time" id="time" step="900" value="20:00">
@@ -305,10 +338,10 @@
       <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot on"></span><span class="dot"></span><span class="dot"></span></div>
       <p class="q-label">Dove preferite sedervi?</p>
       <div class="choice-grid">
-        <div class="choice" data-table="Interno">
+        <div class="choice" data-table="Interno" role="button" tabindex="0" aria-pressed="false">
           <span class="emoji">🛋️</span><span class="name">Interno</span><span class="desc">Al coperto</span>
         </div>
-        <div class="choice" data-table="Esterno">
+        <div class="choice" data-table="Esterno" role="button" tabindex="0" aria-pressed="false">
           <span class="emoji">🌿</span><span class="name">Esterno</span><span class="desc">All'aperto</span>
         </div>
       </div>
@@ -354,6 +387,7 @@
       <p class="final-sub">Tocca il pulsante qui sotto per inviarci la richiesta su WhatsApp.<br>Ti confermeremo noi la disponibilità del tavolo.</p>
       <a class="btn-send" id="waLink" href="#" target="_blank" rel="noopener">Invia su WhatsApp</a>
       <p class="send-hint">Il messaggio è già pronto, dovrai solo premere invio 💬</p>
+      <button class="btn btn-restart" id="btnRestart" type="button">Fai un'altra prenotazione</button>
     </section>
 
   </div>
@@ -385,24 +419,31 @@
     el.classList.remove('hidden');
     el.classList.remove('step');void el.offsetWidth;el.classList.add('step');
     document.querySelector('.card').scrollIntoView({behavior:'smooth',block:'start'});
+    if(id==='s-name')syncNome();
   }
   document.getElementById('btnStart').addEventListener('click',()=>show('s-name'));
 
   // ===== NOME =====
   const nomeEl=document.getElementById('nome');
   const toDay=document.getElementById('toDay');
-  nomeEl.addEventListener('input',()=>{toDay.disabled=nomeEl.value.trim().length<2;});
+  function syncNome(){toDay.disabled=nomeEl.value.trim().length<2;}
+  nomeEl.addEventListener('input',syncNome);
+  nomeEl.addEventListener('change',syncNome);
+  nomeEl.addEventListener('blur',syncNome);
   toDay.addEventListener('click',()=>{data.nome=nomeEl.value.trim();show('s-day');});
 
   // ===== CALENDARIO =====
   const monthsIT=['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
   const daysIT=['domenica','lunedì','martedì','mercoledì','giovedì','venerdì','sabato'];
-  const today=new Date();today.setHours(0,0,0,0);
+  function startOfToday(){const d=new Date();d.setHours(0,0,0,0);return d;}
+  let today=startOfToday();
   let viewY=today.getFullYear(),viewM=today.getMonth(),selDate=null;
   const calTitle=document.getElementById('calTitle'),calGrid=document.getElementById('calGrid'),calPrev=document.getElementById('calPrev');
   const toPeople=document.getElementById('toPeople');
   function sameDay(a,b){return a&&b&&a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
   function renderCal(){
+    today=startOfToday();
+    if(selDate&&selDate<today){selDate=null;data.day='';toPeople.disabled=true;}
     calTitle.textContent=monthsIT[viewM]+' '+viewY;calGrid.innerHTML='';
     let first=(new Date(viewY,viewM,1).getDay()+6)%7;
     const dim=new Date(viewY,viewM+1,0).getDate();
@@ -410,12 +451,23 @@
     for(let d=1;d<=dim;d++){
       const cell=document.createElement('div');cell.className='cal-day';cell.textContent=d;
       const td=new Date(viewY,viewM,d);
-      if(td<today)cell.classList.add('disabled');
+      const iso=viewY+'-'+String(viewM+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      if(td<today){cell.classList.add('disabled');cell.setAttribute('aria-disabled','true');}
       if(sameDay(td,today))cell.classList.add('today');
-      if(sameDay(td,selDate))cell.classList.add('sel');
-      if(td>=today){cell.addEventListener('click',()=>{selDate=td;
-        data.day=`${viewY}-${String(viewM+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-        renderCal();toPeople.disabled=false;});}
+      const isSel=sameDay(td,selDate);
+      if(isSel)cell.classList.add('sel');
+      if(td>=today){
+        cell.setAttribute('role','button');
+        cell.tabIndex=0;
+        cell.setAttribute('aria-pressed',isSel?'true':'false');
+        cell.setAttribute('aria-label',d+' '+monthsIT[viewM]+' '+viewY);
+        const pick=kb=>{
+          selDate=td;data.day=iso;renderCal();toPeople.disabled=false;
+          if(kb){const again=calGrid.querySelector('.cal-day.sel');if(again)again.focus();}
+        };
+        cell.addEventListener('click',()=>pick(false));
+        cell.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(true);}});
+      }
       calGrid.appendChild(cell);
     }
     calPrev.disabled=(viewY===today.getFullYear()&&viewM===today.getMonth());
@@ -427,22 +479,91 @@
   document.getElementById('backName').addEventListener('click',()=>show('s-name'));
 
   // ===== PERSONE + ORARIO =====
-  const paxEl=document.getElementById('pax'),minus=document.getElementById('minus'),plus=document.getElementById('plus');
-  function updPax(){paxEl.textContent=data.pax;minus.disabled=data.pax<=1;paxEl.parentElement.querySelector('small').textContent=data.pax===1?'persona':'persone';}
-  minus.addEventListener('click',()=>{if(data.pax>1){data.pax--;updPax();}});
-  plus.addEventListener('click',()=>{if(data.pax<30){data.pax++;updPax();}});
+  const PAX_MIN=1,PAX_MAX=30;
+  const paxEl=document.getElementById('pax'),paxWord=document.getElementById('paxWord'),paxHint=document.getElementById('paxHint');
+  const minus=document.getElementById('minus'),plus=document.getElementById('plus'),toTable=document.getElementById('toTable');
+  const PAX_HINT=paxHint.textContent;
+  const onlyDigits=/^[0-9]+$/;
+
+  function paxMsg(txt,err){
+    paxHint.textContent=txt||PAX_HINT;
+    paxHint.classList.toggle('err',!!err);
+    paxEl.classList.toggle('err',!!err);
+  }
+
+  function updPax(){
+    const raw=paxEl.value.trim(),n=parseInt(raw,10);
+    const ok=onlyDigits.test(raw)&&n>=PAX_MIN&&n<=PAX_MAX;
+    if(ok)data.pax=n;
+    paxWord.textContent=(ok&&n===1)?'persona':'persone';
+    minus.disabled=ok&&n<=PAX_MIN;
+    plus.disabled=ok&&n>=PAX_MAX;
+    toTable.disabled=!ok;
+    if(ok||raw===''){paxMsg('',false);}
+    else if(onlyDigits.test(raw)&&n>PAX_MAX){paxMsg('Massimo '+PAX_MAX+' persone online: per gruppi pi\u00f9 numerosi chiamaci.',true);}
+    else{paxMsg('Scrivi un numero da '+PAX_MIN+' a '+PAX_MAX+'.',true);}
+  }
+
+  function paxStep(delta){
+    const n=parseInt(paxEl.value,10);
+    let next=Number.isInteger(n)?n+delta:data.pax;
+    next=Math.min(PAX_MAX,Math.max(PAX_MIN,next));
+    paxEl.value=String(next);updPax();
+  }
+  minus.addEventListener('click',()=>paxStep(-1));
+  plus.addEventListener('click',()=>paxStep(1));
+
+  /* Solo cifre: blocca lettere, simboli, spazi e incolla sporco */
+  paxEl.addEventListener('beforeinput',e=>{
+    if(e.data!=null&&/[^0-9]/.test(e.data))e.preventDefault();
+  });
+  paxEl.addEventListener('paste',e=>{
+    const t=(e.clipboardData||window.clipboardData);
+    if(!t)return;
+    let clean=String(t.getData('text')||'').replace(/[^0-9]/g,'').slice(0,2);
+    if(clean.length>1)clean=clean.replace(/^0+/,'')||'0';
+    e.preventDefault();
+    paxEl.value=clean;updPax();
+  });
+  paxEl.addEventListener('input',()=>{
+    let clean=paxEl.value.replace(/[^0-9]/g,'').slice(0,2);
+    if(clean.length>1)clean=clean.replace(/^0+/,'')||'0';
+    if(clean!==paxEl.value)paxEl.value=clean;
+    updPax();
+  });
+  paxEl.addEventListener('keydown',e=>{
+    if(e.key==='ArrowUp'){e.preventDefault();paxStep(1);}
+    else if(e.key==='ArrowDown'){e.preventDefault();paxStep(-1);}
+    else if(e.key==='Enter'){e.preventDefault();paxEl.blur();if(!toTable.disabled)toTable.click();}
+  });
+  paxEl.addEventListener('focus',()=>{setTimeout(()=>{try{paxEl.select();}catch(_){}},0);});
+  paxEl.addEventListener('blur',()=>{
+    const raw=paxEl.value.trim(),n=parseInt(raw,10);
+    if(!onlyDigits.test(raw)){paxEl.value=String(data.pax);updPax();return;}
+    if(n<PAX_MIN){paxEl.value=String(PAX_MIN);updPax();return;}
+    if(n>PAX_MAX){
+      paxEl.value=String(PAX_MAX);updPax();
+      paxMsg('Abbiamo messo il massimo prenotabile online: '+PAX_MAX+' persone. Per gruppi pi\u00f9 numerosi chiamaci.',false);
+      return;
+    }
+    paxEl.value=String(n);
+    updPax();
+  });
   updPax();
   const timeEl=document.getElementById('time');
   document.getElementById('backDay').addEventListener('click',()=>show('s-day'));
-  document.getElementById('toTable').addEventListener('click',()=>{data.time=timeEl.value||'20:00';show('s-table');});
+  toTable.addEventListener('click',()=>{data.time=timeEl.value||'20:00';show('s-table');});
 
   // ===== TAVOLO =====
   const toExtra=document.getElementById('toExtra');
+  function selectChoice(c){
+    document.querySelectorAll('.choice').forEach(x=>{x.classList.remove('sel');x.setAttribute('aria-pressed','false');});
+    c.classList.add('sel');c.setAttribute('aria-pressed','true');
+    data.table=c.dataset.table;toExtra.disabled=false;
+  }
   document.querySelectorAll('.choice').forEach(c=>{
-    c.addEventListener('click',()=>{
-      document.querySelectorAll('.choice').forEach(x=>x.classList.remove('sel'));
-      c.classList.add('sel');data.table=c.dataset.table;toExtra.disabled=false;
-    });
+    c.addEventListener('click',()=>selectChoice(c));
+    c.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectChoice(c);}});
   });
   document.getElementById('backPeople').addEventListener('click',()=>show('s-people'));
   toExtra.addEventListener('click',()=>show('s-extra'));
@@ -459,15 +580,17 @@
   function itDate(iso){if(!iso)return '';const [y,m,d]=iso.split('-');const dt=new Date(+y,+m-1,+d);
     return `${daysIT[dt.getDay()]} ${(+d)} ${monthsIT[+m-1]} ${y}`;}
   function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+  const ESC_MAP={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,ch=>ESC_MAP[ch]);}
   function buildRecap(){
     let rows=`
-      <div class="recap-row"><span class="k">Nome</span><span class="v">${data.nome}</span></div>
+      <div class="recap-row"><span class="k">Nome</span><span class="v">${esc(data.nome)}</span></div>
       <div class="recap-row"><span class="k">Giorno</span><span class="v">${cap(itDate(data.day))}</span></div>
       <div class="recap-row"><span class="k">Persone</span><span class="v">${data.pax}</span></div>
-      <div class="recap-row"><span class="k">Arrivo</span><span class="v">${data.time}</span></div>
+      <div class="recap-row"><span class="k">Arrivo</span><span class="v">${esc(data.time)}</span></div>
       <div class="recap-row"><span class="k">Tavolo</span><span class="v">${data.table}</span></div>`;
-    if(data.allergie)rows+=`<div class="recap-row"><span class="k">Allergie</span><span class="v">${data.allergie}</span></div>`;
-    if(data.note)rows+=`<div class="recap-row"><span class="k">Note</span><span class="v">${data.note}</span></div>`;
+    if(data.allergie)rows+=`<div class="recap-row"><span class="k">Allergie</span><span class="v">${esc(data.allergie)}</span></div>`;
+    if(data.note)rows+=`<div class="recap-row"><span class="k">Note</span><span class="v">${esc(data.note)}</span></div>`;
     document.getElementById('recap').innerHTML=rows;
   }
   document.getElementById('backExtra').addEventListener('click',()=>show('s-extra'));
@@ -485,6 +608,23 @@
     msg+=`\nResto in attesa di conferma, grazie!`;
     document.getElementById('waLink').setAttribute('href',`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`);
     show('s-done');
+  });
+
+  // ===== NUOVA PRENOTAZIONE =====
+  document.getElementById('btnRestart').addEventListener('click',()=>{
+    data.nome='';data.day='';data.pax=2;data.time='20:00';data.table='';data.allergie='';data.note='';
+    nomeEl.value='';toDay.disabled=true;
+    selDate=null;today=startOfToday();viewY=today.getFullYear();viewM=today.getMonth();
+    renderCal();toPeople.disabled=true;
+    paxEl.value='2';updPax();
+    timeEl.value='20:00';
+    document.querySelectorAll('.choice').forEach(x=>{x.classList.remove('sel');x.setAttribute('aria-pressed','false');});
+    toExtra.disabled=true;
+    document.getElementById('allergie').value='';
+    document.getElementById('note').value='';
+    document.getElementById('recap').innerHTML='';
+    document.getElementById('waLink').setAttribute('href','#');
+    show('s-intro');
   });
 
   // Mobile: quando si apre la tastiera, porta il campo attivo in vista
