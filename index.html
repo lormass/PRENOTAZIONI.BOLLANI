@@ -256,6 +256,31 @@
   .btn:focus-visible,.cbtn:focus-visible,.btn-send:focus-visible,.btn-restart:focus-visible,
   .choice:focus-visible,.cal-day:focus-visible,.cal-nav:focus-visible{
     outline:2px solid var(--aperol);outline-offset:3px;}
+  /* ===== Orari di arrivo selezionabili ===== */
+  .slot-head{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--aperol-soft);margin:16px 0 9px;}
+  .slot-head:first-child{margin-top:0;}
+  .slot-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .slot{font-family:'Inter',sans-serif;font-size:.95rem;font-weight:600;color:var(--cream);
+    background:var(--glass);border:1px solid var(--glass-border);border-radius:12px;padding:12px 0;
+    cursor:pointer;touch-action:manipulation;
+    transition:transform .14s,background .2s,border-color .2s,box-shadow .2s;}
+  .slot:hover{background:var(--glass-2);}
+  .slot:active{transform:scale(.94);}
+  .slot.sel{background:linear-gradient(135deg,var(--aperol),var(--aperol-glow));color:#2a1405;
+    font-weight:800;border-color:transparent;box-shadow:0 8px 20px rgba(255,122,26,.42);}
+  .slot-empty{font-size:.86rem;color:var(--red-soft);line-height:1.5;margin:2px 0 0;}
+  .slot:focus-visible{outline:2px solid var(--aperol);outline-offset:3px;}
+  .field-hint{font-size:.78rem;line-height:1.45;color:var(--muted);margin:9px 0 0;}
+  .field-hint.err{color:var(--red-soft);}
+  .field-hint:empty{margin:0;}
+  @media (max-width:420px){
+    .slot{font-size:.88rem;padding:11px 0;}
+    .slot-grid{gap:6px;}
+  }
+  @media (max-width:340px){
+    .slot-grid{grid-template-columns:repeat(3,1fr);}
+  }
 </style>
 </head>
 <body>
@@ -284,7 +309,8 @@
       <p class="q-label">A nome di chi?</p>
       <div class="field">
         <label for="nome">Nome e cognome</label>
-        <input type="text" id="nome" placeholder="Es. Marco Rossi" autocomplete="name">
+        <input type="text" id="nome" placeholder="Es. Marco Rossi" autocomplete="name" enterkeyhint="next">
+        <p class="field-hint" id="nomeHint" role="status" aria-live="polite"></p>
       </div>
       <div class="nav"><button class="btn btn-next" id="toDay" disabled>Avanti</button></div>
     </section>
@@ -324,8 +350,8 @@
       </div>
       <p class="pax-hint" id="paxHint">Scrivi il numero o usa i tasti. Da 1 a 30 persone.</p>
       <div class="field" style="margin-top:28px;">
-        <label for="time">Orario di arrivo</label>
-        <input type="time" id="time" step="900" value="20:00">
+        <label id="slotsLabel">Orario di arrivo</label>
+        <div class="slots" id="slots" role="group" aria-labelledby="slotsLabel"></div>
       </div>
       <div class="nav">
         <button class="btn btn-back" id="backDay">Indietro</button>
@@ -411,7 +437,60 @@
     });
   })();
 
-  const data={nome:'',day:'',pax:2,time:'20:00',table:'',allergie:'',note:''};
+  const data={nome:'',day:'',pax:2,time:'',timeMin:null,table:'',allergie:'',note:''};
+
+  /* ============================================================
+     >>> ORARI DI SERVIZIO <<<
+     Chiave = giorno della settimana (0 = domenica ... 6 = sabato).
+     Ogni fascia e' [apertura, chiusura] in minuti dalla mezzanotte.
+     1440 = 00:00 della notte successiva.
+     Pranzo  lun-ven : 12:00 - 14:00
+     Cena    dom-gio : 18:00 - 23:00
+     Cena    ven-sab : 18:00 - 00:00
+     SLOT_STEP = distanza fra un orario e l'altro (minuti).
+     LEAD_MIN  = anticipo minimo per prenotare lo stesso giorno.
+     ============================================================ */
+  const H=h=>h*60;
+  const SERVICE={
+    0:[[H(18),H(23)]],
+    1:[[H(12),H(14)],[H(18),H(23)]],
+    2:[[H(12),H(14)],[H(18),H(23)]],
+    3:[[H(12),H(14)],[H(18),H(23)]],
+    4:[[H(12),H(14)],[H(18),H(23)]],
+    5:[[H(12),H(14)],[H(18),H(24)]],
+    6:[[H(18),H(24)]]
+  };
+  const SLOT_STEP=15, LEAD_MIN=30, SLOT_PREFERITO=H(20);
+
+  function minToHHMM(t){
+    const h=Math.floor(t/60)%24,m=t%60;
+    return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+  }
+  /* Fasce disponibili per una data, gia' filtrate dall'anticipo minimo se e' oggi */
+  function slotGroupsFor(dt){
+    if(!dt)return [];
+    const wins=SERVICE[dt.getDay()]||[];
+    const oggi=startOfToday();
+    const isToday=sameDay(dt,oggi);
+    const ora=new Date();
+    const limite=ora.getHours()*60+ora.getMinutes()+LEAD_MIN;
+    const out=[];
+    wins.forEach(w=>{
+      const times=[];
+      for(let t=w[0];t<=w[1];t+=SLOT_STEP){
+        if(isToday&&t<limite)continue;
+        times.push(t);
+      }
+      if(times.length)out.push({label:w[0]<H(15)?'Pranzo':'Cena',times:times});
+    });
+    return out;
+  }
+  function giornoPrenotabile(dt){return slotGroupsFor(dt).length>0;}
+  function dateFromIso(iso){
+    if(!iso)return null;
+    const p=iso.split('-');
+    return new Date(+p[0],+p[1]-1,+p[2]);
+  }
 
   function show(id){
     document.querySelectorAll('.step').forEach(s=>s.classList.add('hidden'));
@@ -419,17 +498,38 @@
     el.classList.remove('hidden');
     el.classList.remove('step');void el.offsetWidth;el.classList.add('step');
     document.querySelector('.card').scrollIntoView({behavior:'smooth',block:'start'});
-    if(id==='s-name')syncNome();
+    if(id==='s-name')syncNome(false);
   }
   document.getElementById('btnStart').addEventListener('click',()=>show('s-name'));
 
   // ===== NOME =====
   const nomeEl=document.getElementById('nome');
   const toDay=document.getElementById('toDay');
-  function syncNome(){toDay.disabled=nomeEl.value.trim().length<2;}
-  nomeEl.addEventListener('input',syncNome);
-  nomeEl.addEventListener('change',syncNome);
-  nomeEl.addEventListener('blur',syncNome);
+  const nomeHint=document.getElementById('nomeHint');
+  const PAROLA=/^[A-Za-z\u00C0-\u024F'\u2019.-]+$/;
+  function nomeValido(v){
+    const t=String(v||'').trim().replace(/\s+/g,' ');
+    if(!t||/[0-9]/.test(t))return false;
+    const parti=t.split(' ');
+    if(parti.length<2)return false;
+    if(!parti.every(w=>PAROLA.test(w)))return false;
+    return parti.filter(w=>w.length>=2).length>=2;
+  }
+  function syncNome(mostraErrore){
+    const v=nomeEl.value,ok=nomeValido(v);
+    toDay.disabled=!ok;
+    if(ok||v.trim()===''){nomeHint.textContent='';nomeHint.classList.remove('err');}
+    else if(mostraErrore){
+      nomeHint.textContent='Servono nome e cognome, solo lettere (es. Marco Rossi).';
+      nomeHint.classList.add('err');
+    }
+  }
+  nomeEl.addEventListener('input',()=>syncNome(false));
+  nomeEl.addEventListener('change',()=>syncNome(true));
+  nomeEl.addEventListener('blur',()=>syncNome(true));
+  nomeEl.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){e.preventDefault();syncNome(true);if(!toDay.disabled)toDay.click();}
+  });
   toDay.addEventListener('click',()=>{data.nome=nomeEl.value.trim();show('s-day');});
 
   // ===== CALENDARIO =====
@@ -443,7 +543,7 @@
   function sameDay(a,b){return a&&b&&a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
   function renderCal(){
     today=startOfToday();
-    if(selDate&&selDate<today){selDate=null;data.day='';toPeople.disabled=true;}
+    if(selDate&&(selDate<today||!giornoPrenotabile(selDate))){selDate=null;data.day='';toPeople.disabled=true;}
     calTitle.textContent=monthsIT[viewM]+' '+viewY;calGrid.innerHTML='';
     let first=(new Date(viewY,viewM,1).getDay()+6)%7;
     const dim=new Date(viewY,viewM+1,0).getDate();
@@ -452,11 +552,12 @@
       const cell=document.createElement('div');cell.className='cal-day';cell.textContent=d;
       const td=new Date(viewY,viewM,d);
       const iso=viewY+'-'+String(viewM+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-      if(td<today){cell.classList.add('disabled');cell.setAttribute('aria-disabled','true');}
+      const chiuso=td>=today&&!giornoPrenotabile(td);
+      if(td<today||chiuso){cell.classList.add('disabled');cell.setAttribute('aria-disabled','true');}
       if(sameDay(td,today))cell.classList.add('today');
       const isSel=sameDay(td,selDate);
       if(isSel)cell.classList.add('sel');
-      if(td>=today){
+      if(td>=today&&!chiuso){
         cell.setAttribute('role','button');
         cell.tabIndex=0;
         cell.setAttribute('aria-pressed',isSel?'true':'false');
@@ -475,7 +576,7 @@
   calPrev.addEventListener('click',()=>{if(calPrev.disabled)return;viewM--;if(viewM<0){viewM=11;viewY--;}renderCal();});
   document.getElementById('calNext').addEventListener('click',()=>{viewM++;if(viewM>11){viewM=0;viewY++;}renderCal();});
   renderCal();
-  toPeople.addEventListener('click',()=>show('s-people'));
+  toPeople.addEventListener('click',()=>{renderSlots();show('s-people');});
   document.getElementById('backName').addEventListener('click',()=>show('s-name'));
 
   // ===== PERSONE + ORARIO =====
@@ -483,6 +584,9 @@
   const paxEl=document.getElementById('pax'),paxWord=document.getElementById('paxWord'),paxHint=document.getElementById('paxHint');
   const minus=document.getElementById('minus'),plus=document.getElementById('plus'),toTable=document.getElementById('toTable');
   const PAX_HINT=paxHint.textContent;
+  const slotsBox=document.getElementById('slots');
+  let paxOk=false;
+  function updNext(){toTable.disabled=!(paxOk&&data.timeMin!=null);}
   const onlyDigits=/^[0-9]+$/;
 
   function paxMsg(txt,err){
@@ -498,7 +602,7 @@
     paxWord.textContent=(ok&&n===1)?'persona':'persone';
     minus.disabled=ok&&n<=PAX_MIN;
     plus.disabled=ok&&n>=PAX_MAX;
-    toTable.disabled=!ok;
+    paxOk=ok;updNext();
     if(ok||raw===''){paxMsg('',false);}
     else if(onlyDigits.test(raw)&&n>PAX_MAX){paxMsg('Massimo '+PAX_MAX+' persone online: per gruppi pi\u00f9 numerosi chiamaci.',true);}
     else{paxMsg('Scrivi un numero da '+PAX_MIN+' a '+PAX_MAX+'.',true);}
@@ -534,7 +638,7 @@
   paxEl.addEventListener('keydown',e=>{
     if(e.key==='ArrowUp'){e.preventDefault();paxStep(1);}
     else if(e.key==='ArrowDown'){e.preventDefault();paxStep(-1);}
-    else if(e.key==='Enter'){e.preventDefault();paxEl.blur();if(!toTable.disabled)toTable.click();}
+    else if(e.key==='Enter'){e.preventDefault();paxEl.blur();}
   });
   paxEl.addEventListener('focus',()=>{setTimeout(()=>{try{paxEl.select();}catch(_){}},0);});
   paxEl.addEventListener('blur',()=>{
@@ -550,9 +654,48 @@
     updPax();
   });
   updPax();
-  const timeEl=document.getElementById('time');
+  /* ===== ORARI DI ARRIVO ===== */
+  function renderSlots(){
+    const dt=dateFromIso(data.day);
+    const gruppi=slotGroupsFor(dt);
+    slotsBox.innerHTML='';
+    if(!gruppi.length){
+      data.timeMin=null;data.time='';
+      const p=document.createElement('p');p.className='slot-empty';
+      p.textContent='Per questo giorno non ci sono piu\u2019 orari disponibili: scegli un altro giorno oppure chiamaci.';
+      slotsBox.appendChild(p);updNext();return;
+    }
+    const disponibili=[];
+    gruppi.forEach(g=>g.times.forEach(t=>disponibili.push(t)));
+    if(disponibili.indexOf(data.timeMin)<0){
+      data.timeMin=disponibili.indexOf(SLOT_PREFERITO)>=0?SLOT_PREFERITO:disponibili[0];
+    }
+    data.time=minToHHMM(data.timeMin);
+    gruppi.forEach(g=>{
+      const h=document.createElement('p');h.className='slot-head';h.textContent=g.label;
+      slotsBox.appendChild(h);
+      const grid=document.createElement('div');grid.className='slot-grid';
+      g.times.forEach(t=>{
+        const b=document.createElement('button');
+        b.type='button';b.className='slot';b.textContent=minToHHMM(t);
+        b.setAttribute('aria-pressed',t===data.timeMin?'true':'false');
+        if(t===data.timeMin)b.classList.add('sel');
+        b.addEventListener('click',()=>{
+          data.timeMin=t;data.time=minToHHMM(t);
+          slotsBox.querySelectorAll('.slot').forEach(x=>{
+            x.classList.remove('sel');x.setAttribute('aria-pressed','false');
+          });
+          b.classList.add('sel');b.setAttribute('aria-pressed','true');
+          updNext();
+        });
+        grid.appendChild(b);
+      });
+      slotsBox.appendChild(grid);
+    });
+    updNext();
+  }
   document.getElementById('backDay').addEventListener('click',()=>show('s-day'));
-  toTable.addEventListener('click',()=>{data.time=timeEl.value||'20:00';show('s-table');});
+  toTable.addEventListener('click',()=>{if(toTable.disabled)return;show('s-table');});
 
   // ===== TAVOLO =====
   const toExtra=document.getElementById('toExtra');
@@ -612,12 +755,12 @@
 
   // ===== NUOVA PRENOTAZIONE =====
   document.getElementById('btnRestart').addEventListener('click',()=>{
-    data.nome='';data.day='';data.pax=2;data.time='20:00';data.table='';data.allergie='';data.note='';
-    nomeEl.value='';toDay.disabled=true;
+    data.nome='';data.day='';data.pax=2;data.time='';data.timeMin=null;data.table='';data.allergie='';data.note='';
+    nomeEl.value='';toDay.disabled=true;nomeHint.textContent='';nomeHint.classList.remove('err');
     selDate=null;today=startOfToday();viewY=today.getFullYear();viewM=today.getMonth();
     renderCal();toPeople.disabled=true;
     paxEl.value='2';updPax();
-    timeEl.value='20:00';
+    slotsBox.innerHTML='';
     document.querySelectorAll('.choice').forEach(x=>{x.classList.remove('sel');x.setAttribute('aria-pressed','false');});
     toExtra.disabled=true;
     document.getElementById('allergie').value='';
